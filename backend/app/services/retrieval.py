@@ -90,16 +90,31 @@ def reranker(name: str):
 
 
 def rerank_candidates(question: str, candidates: list[dict], top_k: int, use_model: bool = True) -> list[dict]:
-    from app.services.evidence import clean_pdf_text, clean_text, coverage, evidence_score, focus, quantity_subject
+    from app.services.evidence import (
+        clean_pdf_text,
+        clean_text,
+        comparison_subjects,
+        coverage,
+        evidence_score,
+        focus,
+        quantity_subject,
+        requirements_question,
+        simple_definition,
+        useful_sentence,
+    )
     candidates = [{**item, "text": clean_text(item["text"])} for item in candidates]
     candidates = [{**item, "text": clean_pdf_text(item["text"])} if item.get("document_name", "").lower().endswith(".pdf")
                   else item for item in candidates]
     candidates = [item for item in candidates if item["text"]]
+    if simple_definition(question) and not requirements_question(question):
+        candidates = [item for item in candidates if any(useful_sentence(question, part)
+                      for part in re.split(r"(?<=[。！？])|\n", item["text"]))]
     if quantity_subject(question):
         # A value lookup needs evidence about the requested metric, not just a
         # document title or shared words such as "average" and "time".
         candidates = [item for item in candidates if coverage(question, item["text"]) >= .75]
-    if focus(question) != question or re.search(r"什么是|是什么", question):
+    subjects = comparison_subjects(question)
+    if not subjects and (focus(question) != question or re.search(r"什么是|是什么", question)):
         candidates = [item for item in candidates if coverage(question, item["text"] + " " +
                       item.get("document_name", "") + " " + item.get("knowledge_base_name", "")) >= .75]
     model = get_settings().reranker_model if use_model else ""
@@ -110,7 +125,28 @@ def rerank_candidates(question: str, candidates: list[dict], top_k: int, use_mod
         candidates.sort(key=lambda c: c["rerank_score"], reverse=True)
     else:
         candidates.sort(key=lambda c: (evidence_score(question, c), c.get("retrieval_score", 0)), reverse=True)
-    return candidates[:top_k]
+    # A high score on one side must not crowd out the other named subject.
+    selected = []
+    def topic_score(subject, item):
+        sections = (item.get("locator") or {}).get("section", [])
+        local = " ".join(sections[1:])
+        body = re.sub(r"(?m)^#{1,6}[^\n]*(?:\n|$)", "", item["text"])
+        return coverage(subject, local) if local else 0, coverage(subject, body), evidence_score(subject, item)
+    for subject in subjects:
+        matches = [item for item in candidates if coverage(subject, item["text"] + " " + item.get("document_name", "")) >= .5]
+        if matches:
+            best = max(matches, key=lambda item: topic_score(subject, item))
+            if best not in selected:
+                selected.append(best)
+            if re.search(r"处理|解决|预防|应对", question):
+                solutions = [item for item in matches if topic_score(subject, item)[0] >= .5
+                    and re.search(r"解决方案|应对措施|处理方法|预防措施", " ".join((item.get("locator") or {}).get("section", [])[-1:]))]
+                if solutions:
+                    solution = max(solutions, key=lambda item: topic_score(subject, item))
+                    if solution not in selected:
+                        selected.append(solution)
+    selected.extend(item for item in candidates if item not in selected)
+    return selected[:top_k]
 
 
 def retrieve(question: str, chunks: list[dict], top_k: int = 5, strategy: str = "hybrid", rerank_results: bool = True) -> list[dict]:

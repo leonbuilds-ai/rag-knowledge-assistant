@@ -18,6 +18,7 @@ SUPPORTED_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".html", ".htm", ".pdf",
 class ParsedPage:
     text: str
     page: int = 1
+    markdown: bool = False
 
 
 def _decode(data: bytes) -> str:
@@ -138,8 +139,7 @@ def parse_document(path: Path, filename: str, progress=None) -> list[ParsedPage]
         return [ParsedPage(_image_text(path.read_bytes()))]
     text = _decode(path.read_bytes())
     if ext == ".md":
-        from app.services.evidence import clean_text
-        text = clean_text(text)
+        return [ParsedPage(text, markdown=True)]
     if ext in {".html", ".htm"}:
         from bs4 import BeautifulSoup
 
@@ -160,6 +160,11 @@ def chunk_pages(pages: list[ParsedPage]) -> list[dict]:
         separators=["\n\n", "\n", "。", "！", "？", ". ", " ", ""], length_function=len)
     chunks = []
     for page in pages:
+        if page.markdown:
+            from app.services.markdown import markdown_chunks
+            for item in markdown_chunks(page.text.replace("\x00", ""), s.chunk_size, s.chunk_overlap):
+                chunks.append({**item, "ordinal": len(chunks)})
+            continue
         for text in splitter.split_text(page.text.replace("\x00", "").strip()):
             if text.strip():
                 chunks.append({"text": text, "page": page.page, "ordinal": len(chunks)})

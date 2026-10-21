@@ -84,6 +84,8 @@
 
 摄取任务异步完成文档解析、文本分块、Embedding 与向量索引，任务状态持久化，支持租约恢复与退避重试。文档更新生成新版本，旧版持续服务，新索引就绪后切换；支持历史版本恢复、有效期和目录增量同步。
 
+批量上传逐项展示提交结果，单个文件失败后继续处理其余文件；任务额度暂满时有限重试，支持暂停、继续及仅重试失败项。
+
 ### 🔎 多路召回与融合排序
 
 结合 **Qdrant Dense Retrieval** 与持久化中文 **BM25 倒排索引**，兼顾语义表达和关键词命中，通过 **RRF** 融合候选排名，并支持使用 **Cross-Encoder** 进一步精排。
@@ -103,6 +105,8 @@
 ### 🖼️ 多模态文档理解
 
 支持 **PDF、DOCX、TXT、Markdown、CSV、JSON、HTML 与图片**。PDF 保留页码，Word 文档提取正文与表格；扫描页和图像可接入 **Tesseract OCR** 或 **Qwen 视觉模型**，将图文信息纳入统一检索。
+
+Markdown 按章节和内容块组织证据，保留代码围栏与表格表头，引用可定位到原始文件行号。外链图片保留说明并提示尚未识别，需要图像内容时另行上传图片文件。使用与升级说明见 [Markdown 知识库](docs/markdown-quality.md)。
 
 ### 📊 评测与回放
 
@@ -202,21 +206,18 @@ cd ..
 cp .env.ollama.example .env
 ```
 
-Windows 可使用 `.venv\Scripts\Activate.ps1` 激活环境，也可使用已有 conda 环境。配置文件提供 Ollama 模型示例；准备模型后，在两个终端分别启动：
+Windows 可使用 `.venv\Scripts\Activate.ps1` 激活环境，也可使用已有 conda 环境。准备好 Docker 基础服务和模型后，在项目根目录一键启动：
 
-```bash
-# 终端一：API
-cd backend
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8010
+```powershell
+.\scripts\dev.ps1
+# 使用其他 Conda 环境：.\scripts\dev.ps1 -CondaEnv your-env
+# 仅检查现有服务：.\scripts\dev.ps1 -Service status
+# 终端已关闭时停止三个服务：.\scripts\dev.ps1 -Service stop
 ```
 
-```bash
-# 终端二：前端
-cd frontend
-npm run dev
-```
+脚本默认使用 `cook-rag-1`，在同一个终端启动 API、前端与所需的独立 Worker，按服务名称汇总日志。按 **Ctrl+C** 停止本次启动的进程；已运行的健康服务会被复用并保留。未启用 Redis 时使用 API 内置任务线程。启动器不会自动切换端口，发现其他程序占用端口时会给出明确提示。
 
-访问 [http://localhost:5173](http://localhost:5173)。启用 Redis 队列时，另在 `backend` 目录运行 `python -m app.worker`，并配置 Qdrant server。
+其他系统或已激活 Python 环境时，可直接运行 `python scripts/dev.py`。访问 [http://localhost:5173](http://localhost:5173)。启用 Redis 队列时须同时配置 Qdrant server；本次新启动服务的日志保存在 `artifacts/dev/`。
 
 ## 模型接入
 

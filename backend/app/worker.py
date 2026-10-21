@@ -146,7 +146,7 @@ def process_job(database, settings, job_id):
             for item in indexed:
                 length, terms = term_rows(item["id"], item["text"])
                 db.add(Chunk(id=item["id"], document_id=document_id, revision_id=revision_id, text=item["text"],
-                             page=item.get("page"), ordinal=item["ordinal"], token_count=length))
+                             page=item.get("page"), ordinal=item["ordinal"], token_count=length, locator=item.get("locator", {})))
                 db.flush()
                 db.add_all(terms)
             revision = db.get(DocumentRevision, revision_id)
@@ -284,6 +284,8 @@ def main():
     database.initialize()
     signal.signal(signal.SIGINT, lambda *_: stop.set())
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, lambda *_: stop.set())
     try:
         run_worker(database, settings, stop)
     finally:

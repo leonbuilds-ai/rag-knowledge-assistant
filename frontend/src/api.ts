@@ -2,8 +2,9 @@ export type User = { id: string; email: string; name: string; is_platform_admin?
 export type KnowledgeBase = { id: string; name: string; description: string; created_at: string; document_count: number; organization_id?: string; visibility?: 'organization' | 'restricted'; role: 'admin' | 'editor' | 'reader' }
 export type Document = { id: string; knowledge_base_id: string; name: string; size_bytes: number; status: string; chunk_count: number; error?: string; created_at: string; job_id?: string; active_revision_id?: string; source?: string; expires_at?: string }
 export type Job = { id: string; status: string; progress: number; error?: string; document_id: string; stage?: string; processed_pages?: number; total_pages?: number }
-export type Chunk = { id: string; text: string; page: number | null; ordinal: number }
-export type Citation = { chunk_id: string; document_id: string; document_name: string; knowledge_base_id: string; page: number | null; text: string; score: number; revision_id?: string; source?: string }
+export type Locator = { section?: string[]; line_start?: number; line_end?: number; warnings?: string[] }
+export type Chunk = { id: string; text: string; page: number | null; ordinal: number; locator?: Locator }
+export type Citation = { chunk_id: string; document_id: string; document_name: string; knowledge_base_id: string; page: number | null; text: string; score: number; revision_id?: string; source?: string; locator?: Locator }
 export type Trace = { step: string; detail: unknown }
 export type Message = { id: string; role: string; content: string; citations?: Citation[]; trace?: Trace[]; created_at?: string; pending?: boolean }
 export type Conversation = { id: string; title: string; created_at: string }
@@ -15,7 +16,7 @@ export type ChatResponse = { answer: string; citations: Citation[]; trace: Trace
 
 export const API_BASE = (import.meta.env.VITE_API_BASE || '/api').replace(/\/$/, '')
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); this.name = 'ApiError' }
+  constructor(message: string, public status: number, public retryAfter?: number) { super(message); this.name = 'ApiError' }
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -32,7 +33,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       if (typeof error.detail === 'string') message = error.detail
       else if (Array.isArray(error.detail)) message = error.detail.map((item: { msg: string; loc?: string[] }) => `${item.loc?.slice(1).join('.') || '参数'}: ${item.msg}`).join('；')
     } catch { /* A non-JSON server response still has a useful HTTP status. */ }
-    throw new ApiError(message, response.status)
+    const retry = response.headers.get('Retry-After')
+    const seconds = retry ? Number(retry) || Math.max(0, (Date.parse(retry) - Date.now()) / 1000) : undefined
+    throw new ApiError(message, response.status, seconds)
   }
   if (response.status === 204) return undefined as T
   return response.json()

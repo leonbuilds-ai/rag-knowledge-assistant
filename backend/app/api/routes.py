@@ -374,7 +374,7 @@ def retry_document(document_id: str, request: Request, db: DB, user: CurrentUser
 @router.get("/documents/{document_id}/chunks")
 def document_chunks(document_id: str, db: DB, user: CurrentUser):
     document = own_document(db, user, document_id)
-    return [{"id": chunk.id, "text": chunk.text, "page": chunk.page, "ordinal": chunk.ordinal}
+    return [{"id": chunk.id, "text": chunk.text, "page": chunk.page, "ordinal": chunk.ordinal, "locator": chunk.locator or {}}
             for chunk in db.scalars(select(Chunk).where(Chunk.document_id == document_id,
                 Chunk.revision_id == document.active_revision_id).order_by(Chunk.ordinal).limit(500)).all()]
 

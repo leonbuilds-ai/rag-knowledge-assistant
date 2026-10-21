@@ -49,7 +49,7 @@ class CorpusScope:
         return {c.id: {"id": c.id, "document_id": d.id, "document_name": d.name,
             "knowledge_base_id": d.knowledge_base_id, "text": c.text, "page": c.page,
             "ordinal": c.ordinal, "revision_id": c.revision_id, "source": d.source,
-            "knowledge_base_name": name} for c, d, name in rows}
+            "knowledge_base_name": name, "locator": c.locator or {}} for c, d, name in rows}
 
     def sparse(self, question, limit):
         from app.services.evidence import terms
@@ -85,9 +85,22 @@ class CorpusScope:
                                .order_by(Chunk.ordinal)).all()
         from app.services.evidence import clean_pdf_text, clean_text
         expanded = []
+        groups = []
         for candidate in candidates:
             group = [row for row in rows if row.document_id == candidate["document_id"]
                      and row.page == candidate.get("page") and abs(row.ordinal-candidate["ordinal"]) <= 1]
+            ids = {row.id for row in group}
+            overlaps = [entry for entry in groups if ids & set(entry[1])]
+            if overlaps:
+                target = overlaps[0]
+                target[1].update({row.id: row for row in group})
+                for other in overlaps[1:]:
+                    target[1].update(other[1])
+                    groups.remove(other)
+            else:
+                groups.append([candidate, {row.id: row for row in group}])
+        for candidate, neighbors in groups:
+            group = sorted(neighbors.values(), key=lambda row: row.ordinal)
             text = ""
             for row in group:
                 part = clean_text(row.text)
@@ -95,7 +108,11 @@ class CorpusScope:
                     part = clean_pdf_text(part)
                 overlap = next((n for n in range(min(len(text),len(part),200), 19, -1) if text.endswith(part[:n])), 0)
                 text += ("\n\n" if text and not overlap else "") + part[overlap:]
-            expanded.append({**candidate, "text": text or candidate["text"], "context_chunk_ids": [row.id for row in group]})
+            locator = dict(candidate.get("locator") or {})
+            located = [row.locator for row in group if row.locator and row.locator.get("line_start")]
+            if located:
+                locator.update(line_start=min(p["line_start"] for p in located), line_end=max(p["line_end"] for p in located))
+            expanded.append({**candidate, "text": text or candidate["text"], "context_chunk_ids": [row.id for row in group], "locator": locator})
         return expanded
 
     def dense_filter(self):

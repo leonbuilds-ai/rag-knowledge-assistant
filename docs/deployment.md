@@ -125,14 +125,21 @@ conda activate rag-assistant
 .\scripts\bootstrap.ps1 -CondaEnv rag-assistant -WithModels -WithEvaluation
 ```
 
-在不同终端中分别运行：
+在项目根目录用一个终端启动前端、API 与所需的 Worker：
 
 ```powershell
-.\scripts\dev.ps1 -Service backend -CondaEnv rag-assistant
-.\scripts\dev.ps1 -Service frontend -CondaEnv rag-assistant
+.\scripts\dev.ps1 -CondaEnv rag-assistant
+# 只检查依赖和现有服务，不启动进程
+.\scripts\dev.ps1 -Service status -CondaEnv rag-assistant
+# 启动窗口已关闭时，停止此项目的三个服务
+.\scripts\dev.ps1 -Service stop -CondaEnv rag-assistant
 ```
 
-后端默认监听 `127.0.0.1:8010`，前端监听 `127.0.0.1:5173`。也可以激活环境后，直接使用上面的 `python -m uvicorn` 和 `npm` 命令。
+不指定 `-CondaEnv` 时默认使用 `cook-rag-1`。后端监听 `127.0.0.1:8010`，前端监听 `127.0.0.1:5173`，不同服务日志使用 `[API]`、`[Worker]`、`[Web]` 前缀，并保存在 `artifacts/dev/`。启动失败时清理本次已经启动的进程；运行中任一受管服务退出时，停止其余受管服务。按 Ctrl+C 退出后，PowerShell 返回原目录。
+
+已运行且身份匹配的 API/前端，以及同项目目录中具有有效心跳的本机 Worker 会被复用，退出时保留。未知程序占用 8010 或 5173 时停止启动并提示检查，不自动结束进程或切换端口。第一次从多个终端迁移时，可先在原窗口按 Ctrl+C 停止服务，再运行一键命令，让三个服务都由新窗口管理。
+
+启动器只管理开发应用进程，Docker 基础服务和 Ollama 应提前启动。需要单独调试时，仍可使用 `-Service backend`、`-Service frontend`、`-Service worker`，或直接运行上面的 `python -m uvicorn` 和 `npm` 命令。
 
 ### 独立 Worker
 
@@ -146,7 +153,7 @@ cd backend
 python -m app.worker
 ```
 
-Windows 可使用：
+一键启动器在启用 Redis 时自动启动或复用独立 Worker。Windows 单独调试 Worker 时可使用：
 
 ```powershell
 .\scripts\dev.ps1 -Service worker -CondaEnv rag-assistant

@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "pytest-cov>=5,<8", "ruff>=0.9,<1"]
+dev = ["pytest>=8,<10", "pytest-cov>=5,<8", "ruff>=0.9,<1", "psutil>=6,<8"]
 ml = ["sentence-transformers>=3,<7", "pytesseract>=0.3.13"]
 test = ["pytest>=8,<10", "pytest-cov>=5,<8"]
 models = ["sentence-transformers>=3,<7", "pytesseract>=0.3.13"]

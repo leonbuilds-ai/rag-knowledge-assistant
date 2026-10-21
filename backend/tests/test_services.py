@@ -58,6 +58,19 @@ def test_single_chunk_bm25_has_positive_match(local_services):
     assert result and result[0]["document_id"] == "d1"
 
 
+def test_definition_with_comparison_keeps_both_independent_sources(local_services):
+    chunks = [
+        {"id": "lead1", "document_id": "release", "document_name": "发布.md", "knowledge_base_id": "k1",
+         "text": "发布前置时间是代码提交至生产环境部署完成的时间。"},
+        {"id": "lead2", "document_id": "request", "document_name": "需求.md", "knowledge_base_id": "k1",
+         "text": "需求前置时间是需求提出至功能交付完成的时间。"},
+    ]
+    retrieval.index_chunks(chunks)
+    result = answering.answer_question("发布前置时间指的是什么，和需求前置时间有什么不同？", chunks)
+    assert {c["document_id"] for c in result["citations"]} == {"release", "request"}
+    assert "代码提交" in result["answer"] and "需求提出" in result["answer"]
+
+
 def test_hash_is_deterministic_and_empty_scope_never_searches(local_services):
     assert embed(["你好 RAG"])[0] == embed(["你好 RAG"])[0]
     assert retrieval.retrieve("secret", []) == []

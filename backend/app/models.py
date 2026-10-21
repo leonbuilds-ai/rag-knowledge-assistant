@@ -77,6 +77,7 @@ class Chunk(Base):
     ordinal: Mapped[int] = mapped_column(Integer)
     revision_id: Mapped[str | None] = mapped_column(String(36), index=True)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
+    locator: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
 
 
 class IngestionJob(Base):
